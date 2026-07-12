@@ -1,0 +1,12 @@
+[package]
+name = "textr-org-core"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+# The UI-agnostic heart of the editor. No frontend (TUI/GUI) dependencies here —
+# this crate must compile and be fully testable without any terminal or windowing.
+# (gedit analog: the document/view/tab/window/command model, minus the GTK widgets.)
+[dependencies]
+ropey.workspace = true
+thiserror.workspace = true

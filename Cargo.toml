@@ -1,0 +1,24 @@
+[workspace]
+resolver = "2"
+members = [
+    "crates/core",
+    "crates/tui",
+]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+license = "GPL-2.0-or-later"
+repository = ""
+
+# Shared dependency versions live here so every crate pins the same release.
+# (gedit analog: the top-level meson.build that declares versions once.)
+[workspace.dependencies]
+ropey = "1.6"
+thiserror = "1.0"
+encoding_rs = "0.8"
+chardetng = "0.1"
+# Terminal frontend only — the core crate never depends on these. crossterm is
+# pinned to the version ratatui 0.29 re-exports, so there is one crossterm in the tree.
+ratatui = "0.29"
+crossterm = "0.28"

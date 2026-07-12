@@ -1,0 +1,16 @@
+[package]
+name = "textr-org-tui"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+# The terminal frontend. Depends on the headless core plus the terminal stack;
+# the core crate must never depend back on this. (gedit analog: the GTK frontend.)
+[[bin]]
+name = "torg"
+path = "src/main.rs"
+
+[dependencies]
+textr-org-core = { path = "../core" }
+ratatui.workspace = true
+crossterm.workspace = true

@@ -26,7 +26,7 @@ pub enum Action {
     // file
     Save,
     Quit,
-    // structure (Org)
+    // structure
     ToggleFold,
     NextHeading,
     PrevHeading,

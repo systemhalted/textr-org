@@ -14,10 +14,11 @@ later as an installable *package* over a stable core API.)
 ## Status
 
 **Runnable.** `textr-org` is a terminal editor that opens, edits, and saves multiple buffers —
-several files in one session, switched without quitting — and it already understands Org `*`
-headings: folding, heading navigation, and `TODO`/`DONE` cycling. This is Milestone 2 plus the
-first cut of the multi-file machinery the roadmap points at M5; the longer arc toward full Org
-(agenda, source blocks, export) is in [`docs/roadmap.md`](docs/roadmap.md).
+several files in one session, switched without quitting — and it understands both Org `*`
+headings and Markdown `#` headings: folding, heading navigation, and `TODO`/`DONE` cycling,
+chosen per buffer by file extension. This is Milestone 2 plus the multi-file machinery the
+roadmap points at M5 and M3's Markdown provider (structural editing remains); the longer arc
+toward full Org (agenda, source blocks, export) is in [`docs/roadmap.md`](docs/roadmap.md).
 
 ```sh
 cargo run -p textr-org-tui -- notes.org
@@ -35,13 +36,15 @@ list:
   own cursor, folds, and scroll, and closing or quitting past unsaved changes asks first
 - save with `Ctrl+S`; an untitled buffer prompts for a path (*Save As*); write errors show on
   the status line instead of crashing
-- **Org structure**: `Tab` folds/unfolds a heading's subtree, `Ctrl+N`/`Ctrl+P` jump between
-  headings, `Ctrl+T` cycles a heading none → `TODO` → `DONE` → none
+- **structure, per format**: `Tab` folds/unfolds a heading's subtree, `Ctrl+N`/`Ctrl+P` jump
+  between headings, `Ctrl+T` cycles a heading none → `TODO` → `DONE` → none — for Org `*`
+  headings and, in `.md` files, Markdown `#` headings (fenced code blocks are ignored)
 
 **The headless core (`textr-org-core`)** — a `Document` on a [`ropey`](https://crates.io/crates/ropey)
 rope (load/save/*Save As* with typed errors, char-indexed edits, a modified flag), a `View`
 (cursor + editing, goal column), and a format-agnostic `structure` layer (outline, fold
-extents, TODO cycling) behind a `StructureProvider` trait with an Org implementation.
+extents, TODO cycling) behind a `StructureProvider` trait with Org and Markdown
+implementations, selected per file by `detect_format`.
 
 Everything with a branch is unit-tested (~100 tests); the terminal glue is the only untested
 surface. New to the codebase? [`docs/tutorial.md`](docs/tutorial.md) walks through the Rust
@@ -57,7 +60,7 @@ separation *inside* the frontend (rendering vs the raw terminal driver) — is i
 ```
 textr-org/
 ├── crates/
-│   ├── core/        # UI-agnostic heart: Document, View, structure (Org provider).
+│   ├── core/        # UI-agnostic heart: Document, View, structure (Org + Markdown).
 │   │                #   Tab, Window, commands planned. gedit's model layer, minus GTK.
 │   ├── tui/         # terminal frontend (ratatui + crossterm) — the `torg` binary
 │   └── gui/         # planned — desktop frontend (gtk4-rs), reusing the same core
@@ -84,7 +87,8 @@ detail — including the north star of Org-mode–class structure editing for an
 1. **Core document model** — rope buffer, open/save, edits — *done*
 2. **TUI + Org outline core** — open/edit/save; folding, heading nav, TODO cycling; multiple
    buffers with switching — *done (current)*
-3. **Markdown provider + structural editing** — 2nd provider; promote/demote, move subtrees
+3. **Markdown provider + structural editing** — 2nd provider *(done)*; promote/demote, move
+   subtrees *(remaining)*
 4. **Rich content** — tables, lists, links, timestamps
 5. **Agenda** — multi-file collection, a date model
 6. **Babel** — sandboxed source-block execution

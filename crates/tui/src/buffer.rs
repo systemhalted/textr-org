@@ -9,7 +9,7 @@ use std::collections::HashSet;
 use std::path::{Path, PathBuf};
 
 use textr_org_core::document::Document;
-use textr_org_core::structure::{Outline, OrgProvider, StructureProvider};
+use textr_org_core::structure::{detect_format, Format, Outline, StructureProvider};
 use textr_org_core::view::View;
 
 /// A single open file: the document plus all of its per-buffer editor state. Switching
@@ -25,13 +25,17 @@ pub struct Buffer {
     pub(crate) scroll_top: usize,
     /// For a buffer opened on a not-yet-existing path: where the first save should go.
     pub(crate) stash_path: Option<PathBuf>,
+    /// The document format (chosen by file extension), deciding which structure provider
+    /// parses this buffer. Re-detected when *Save As* gives the buffer a new path.
+    pub(crate) format: Format,
 }
 
 impl Buffer {
     /// Build a buffer over `doc`. `stash_path` is `Some` when the file did not exist yet —
     /// the first save writes there without prompting.
     pub fn new(doc: Document, stash_path: Option<PathBuf>) -> Self {
-        let outline = OrgProvider.parse(&doc);
+        let format = detect_format(doc.path().or(stash_path.as_deref()));
+        let outline = format.parse(&doc);
         Self {
             doc,
             view: View::new(),
@@ -39,6 +43,7 @@ impl Buffer {
             outline,
             scroll_top: 0,
             stash_path,
+            format,
         }
     }
 
@@ -105,6 +110,31 @@ mod tests {
         let stash = Buffer::new(Document::new(), Some(PathBuf::from("todo/new.org")));
         assert_eq!(stash.display_name(), "new.org");
         assert_eq!(Buffer::untitled().display_name(), "[No Name]");
+    }
+
+    #[test]
+    fn buffer_detects_markdown_from_the_document_path() {
+        let path = std::env::temp_dir().join(format!("textr_buf_md_{}.md", std::process::id()));
+        std::fs::write(&path, "# h\nbody\n").unwrap();
+        let buf = Buffer::new(Document::open(&path).unwrap(), None);
+        assert_eq!(buf.format, Format::Markdown);
+        assert_eq!(buf.outline.headings.len(), 1);
+        assert_eq!(buf.outline.headings[0].title, "h");
+        let _ = std::fs::remove_file(&path);
+    }
+
+    #[test]
+    fn buffer_detects_markdown_from_the_stash_path() {
+        let buf = Buffer::new(Document::new(), Some(PathBuf::from("notes.md")));
+        assert_eq!(buf.format, Format::Markdown);
+    }
+
+    #[test]
+    fn untitled_and_org_buffers_default_to_org() {
+        assert_eq!(Buffer::untitled().format, Format::Org);
+        let buf = Buffer::new(Document::from_text("* h\n"), None);
+        assert_eq!(buf.format, Format::Org);
+        assert_eq!(buf.outline.headings.len(), 1);
     }
 
     #[test]

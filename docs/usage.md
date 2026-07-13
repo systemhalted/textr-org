@@ -1,7 +1,8 @@
 # textr-org usage
 
 A terminal text editor with a first cut of Org-mode–style structure editing. Opens, edits, and
-saves multiple buffers, and understands Org `*` headings (folding, navigation, TODO cycling).
+saves multiple buffers, and understands Org `*` headings and Markdown `#` headings (folding,
+navigation, TODO cycling).
 
 ## Running it
 
@@ -60,6 +61,26 @@ next heading of the same or a shallower level.
 The outline is re-read as you type, so turning a line into a heading (or editing one) updates
 folding and navigation immediately.
 
+## File formats
+
+The structure features work per buffer, in the format the file's extension names:
+
+- **`.md` / `.markdown`** (any letter case) — Markdown ATX headings: `#` through `######` at
+  the start of a line, followed by a space and a title. Same keys as Org: `Tab` folds,
+  `Ctrl+N`/`Ctrl+P` navigate, and `Ctrl+T` cycles `# task` → `# TODO task` → `# DONE task` —
+  the TODO keywords are torg's convention, carried over from Org.
+- **Everything else** — including `.org`, unknown extensions, and untitled buffers — is
+  treated as Org.
+
+Details worth knowing:
+
+- Headings inside fenced code blocks (``` or `~~~`) are ignored — a `# comment` in a fenced
+  shell script neither folds nor navigates, and `Ctrl+T` leaves it alone.
+- The format is re-detected when *Save As* gives a buffer a new name: save an untitled buffer
+  as `notes.md` and its outline switches to Markdown on the spot.
+- Setext (underlined) headings are not recognized, and a closing hash run (`## title ##`)
+  stays part of the title.
+
 ## Multiple files
 
 Several files can be open at once; each keeps its own cursor, folds, and scroll position, so
@@ -106,7 +127,6 @@ This is the first runnable milestone; several things are deliberately out of sco
 - **No line wrapping** — long lines are clipped at the right edge (no horizontal scroll).
 - **Cursor drift on wide/combining characters** — the cursor is placed by character count, so
   full-width CJK or grapheme clusters can misalign visually.
-- **Org only** — Markdown (`#` headings) structure support arrives in the next milestone.
 - **Structure basics only** — no promote/demote or subtree moves, no tables, timestamps,
   agenda, source-block execution, or export yet. See [`roadmap.md`](roadmap.md) for where these
   land (M3–M7).

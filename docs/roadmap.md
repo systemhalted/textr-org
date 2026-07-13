@@ -65,6 +65,11 @@ The **fast-follow that proves the trait is genuinely format-agnostic**: a second
 edits — promote/demote a heading, move a subtree up/down, insert sibling/child headings — plus
 TODO priorities and tags. Both formats exercise the same operations from day one.
 
+*Status: the Markdown provider half is **shipped** — `MarkdownProvider` (fence-aware ATX
+parsing) plus `Format`/`detect_format` select structure per buffer by extension, cashing in
+the "second provider validates the trait" bet. Structural editing, priorities, and tags
+remain.*
+
 ### M4 — Rich content
 Tables (with recalculation), lists, inline markup, links, and `SCHEDULED`/`DEADLINE`
 timestamps parsed as data rather than plain text.

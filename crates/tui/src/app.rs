@@ -10,7 +10,9 @@ use std::path::{Path, PathBuf};
 
 use crossterm::event::{KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
 use textr_org_core::document::Document;
-use textr_org_core::structure::{next_heading, prev_heading, Outline, OrgProvider, StructureProvider};
+use textr_org_core::structure::{
+    detect_format, next_heading, prev_heading, Outline, StructureProvider,
+};
 use textr_org_core::view::View;
 
 use crate::action::{key_to_action, Action};
@@ -252,7 +254,7 @@ impl App {
             }
             Action::CycleTodo => {
                 let b = self.buf_mut();
-                OrgProvider.cycle_todo(&mut b.doc, b.view.cursor_line());
+                b.format.cycle_todo(&mut b.doc, b.view.cursor_line());
                 self.reparse();
             }
             Action::OpenFile => {
@@ -345,7 +347,7 @@ impl App {
     /// Re-parse the outline after an edit and drop folds whose heading line no longer exists.
     fn reparse(&mut self) {
         let b = self.buf_mut();
-        b.outline = OrgProvider.parse(&b.doc);
+        b.outline = b.format.parse(&b.doc);
         let heading_lines: HashSet<usize> = b.outline.headings.iter().map(|h| h.line).collect();
         b.folded.retain(|line| heading_lines.contains(line));
     }
@@ -371,7 +373,12 @@ impl App {
         match self.buf_mut().doc.save_as(path) {
             Ok(()) => {
                 self.status = format!("Saved {}", path.display());
-                self.buf_mut().stash_path = None;
+                let b = self.buf_mut();
+                b.stash_path = None;
+                // The new name may mean a new format (e.g. saved as .md) — re-detect and
+                // re-parse so the outline (and any now-stale folds) follow the format.
+                b.format = detect_format(b.doc.path());
+                self.reparse();
             }
             Err(e) => self.status = format!("Save failed: {e}"),
         }
@@ -595,6 +602,79 @@ mod tests {
         press(&mut app, KeyCode::Home);
         typ(&mut app, "* "); // turn the line into a heading
         assert_eq!(app.outline().headings.len(), 1);
+    }
+
+    /// A buffer that torg treats as Markdown: an untitled doc stashed to a `.md` path.
+    fn md_app(text: &str) -> App {
+        single(Document::from_text(text), Some(PathBuf::from("virtual.md")))
+    }
+
+    #[test]
+    fn tab_folds_and_ctrl_n_navigates_markdown_headings() {
+        let mut app = md_app("# A\nbody\n# B\n");
+        press(&mut app, KeyCode::Tab); // caret on "# A"
+        assert!(app.is_folded_heading(0));
+        assert!(app.is_hidden(1));
+        ctrl(&mut app, 'n');
+        assert_eq!(app.view().cursor_line(), 2); // jumped to "# B"
+    }
+
+    #[test]
+    fn ctrl_t_cycles_todo_in_a_markdown_buffer() {
+        let mut app = md_app("# task\n");
+        ctrl(&mut app, 't');
+        assert_eq!(app.document().text(), "# TODO task\n");
+        ctrl(&mut app, 't');
+        assert_eq!(app.document().text(), "# DONE task\n");
+    }
+
+    #[test]
+    fn each_buffer_uses_its_own_provider() {
+        let mut app = App::new(vec![
+            Buffer::new(Document::from_text("# md-style\n* org-style\n"), None), // Org buffer
+            Buffer::new(
+                Document::from_text("# md-style\n* org-style\n"),
+                Some(PathBuf::from("x.md")), // Markdown buffer, same text
+            ),
+        ]);
+        assert_eq!(app.outline().headings[0].title, "org-style");
+        alt(&mut app, 'n');
+        assert_eq!(app.outline().headings[0].title, "md-style");
+        ctrl(&mut app, 't'); // cursor on line 0 = "# md-style", a heading here
+        assert_eq!(app.document().text(), "# TODO md-style\n* org-style\n");
+    }
+
+    #[test]
+    fn save_as_to_md_redetects_the_format() {
+        let path = temp_path("redetect").with_extension("md");
+        let _ = std::fs::remove_file(&path);
+        let mut app = single(Document::from_text("# A\nbody\n* B\n"), None);
+        assert_eq!(app.outline().headings[0].title, "B"); // untitled → Org default
+
+        ctrl(&mut app, 's'); // Save As prompt
+        typ(&mut app, path.to_str().unwrap());
+        press(&mut app, KeyCode::Enter);
+
+        assert_eq!(app.outline().headings.len(), 1);
+        assert_eq!(app.outline().headings[0].title, "A"); // now parsed as Markdown
+        let _ = std::fs::remove_file(&path);
+    }
+
+    #[test]
+    fn save_as_format_change_drops_stale_folds() {
+        let path = temp_path("foldflip").with_extension("md");
+        let _ = std::fs::remove_file(&path);
+        let mut app = single(Document::from_text("* A\nbody\n"), None);
+        press(&mut app, KeyCode::Tab); // fold the Org heading
+        assert!(app.is_folded_heading(0));
+
+        ctrl(&mut app, 's');
+        typ(&mut app, path.to_str().unwrap());
+        press(&mut app, KeyCode::Enter);
+
+        assert!(!app.is_folded_heading(0)); // "* A" is not a Markdown heading
+        assert!(!app.is_hidden(1));
+        let _ = std::fs::remove_file(&path);
     }
 
     #[test]

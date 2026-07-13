@@ -46,7 +46,8 @@ place, so a future GUI reuses the state and render logic without inheriting the 
         │ crates/core  (headless — no terminal, no ratatui)        │
         │  document::Document (rope I/O)   view::View (cursor+edit) │
         │  structure::{Outline, Heading, TodoState}                │
-        │  StructureProvider ──impl── OrgProvider  (Markdown → M3) │
+        │  StructureProvider ──impl── OrgProvider · MarkdownProvider │
+        │                     (Format + detect_format pick one)     │
         └─────────────────────────────────────────────────────────┘
 ```
 
@@ -107,16 +108,26 @@ pub trait StructureProvider {
     fn cycle_todo(&self, doc: &mut Document, line: usize); // None → TODO → DONE → None
 }
 
-pub struct OrgProvider; // recognizes ^(\*+)\s+(?:(TODO|DONE)\s+)?(rest)$
+pub struct OrgProvider;      // recognizes ^(\*+) +(?:(TODO|DONE) +)?(rest)$
+pub struct MarkdownProvider; // recognizes ^(#{1,6}) +(?:(TODO|DONE) +)?(rest)$, skipping
+                             // fenced code blocks (```/~~~)
+
+pub enum Format { Org, Markdown }               // impl StructureProvider by delegation
+pub fn detect_format(path: Option<&Path>) -> Format; // .md/.markdown → Markdown, else Org
 ```
 
 - **Navigation** (`next_heading` / `prev_heading` / `parent_heading`) is pure free functions
   over `&Outline` + a cursor line — no `Document` mutation.
 - **`cycle_todo`** is the one structural *edit* in M2; the provider rewrites the heading line
   via `Document::remove`/`insert` on char indices from `line_to_char`.
-- The Markdown provider (M3) is the second implementer — the test that the trait is genuinely
-  format-agnostic. Agenda (M5) and export (M7) consume this same model, so they too are written
-  once against the trait rather than per-format.
+- `MarkdownProvider` (M3) is the second implementer — the test that the trait is genuinely
+  format-agnostic, which folding, navigation, and TODO cycling passed without change. Its
+  parse is stateful (headings inside fenced code blocks are skipped), so its `cycle_todo`
+  checks the full parse rather than one line. Agenda (M5) and export (M7) consume this same
+  model, so they too are written once against the trait rather than per-format.
+- **Which format a buffer uses is per-buffer TUI state** (`Buffer.format`), chosen by
+  `detect_format` from the file extension at buffer creation and re-detected on *Save As*.
+  The detection rule itself (".md means Markdown") is format knowledge and lives in core.
 
 ## Where folding lives — and why not in core
 

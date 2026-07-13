@@ -39,6 +39,10 @@ list:
 - **structure, per format**: `Tab` folds/unfolds a heading's subtree, `Ctrl+N`/`Ctrl+P` jump
   between headings, `Ctrl+T` cycles a heading none → `TODO` → `DONE` → none — for Org `*`
   headings and, in `.md` files, Markdown `#` headings (fenced code blocks are ignored)
+- **structural editing**: promote/demote a heading or whole subtree (`Alt+←/→`, `+Shift`),
+  move subtrees among siblings (`Alt+↑/↓`), insert sibling headings (`Alt+Enter`), cycle
+  `[#A]`/`[#B]`/`[#C]` priorities (`Shift+↑/↓`), and edit `:tags:` (`Ctrl+G`) — same
+  operations in both formats, written once against the structure trait
 
 **The headless core (`textr-org-core`)** — a `Document` on a [`ropey`](https://crates.io/crates/ropey)
 rope (load/save/*Save As* with typed errors, char-indexed edits, a modified flag), a `View`
@@ -87,8 +91,8 @@ detail — including the north star of Org-mode–class structure editing for an
 1. **Core document model** — rope buffer, open/save, edits — *done*
 2. **TUI + Org outline core** — open/edit/save; folding, heading nav, TODO cycling; multiple
    buffers with switching — *done*
-3. **Markdown provider + structural editing** — 2nd provider *(done)*; promote/demote, move
-   subtrees, priorities, tags — *(current)*
+3. **Markdown provider + structural editing** — 2nd provider; promote/demote, move
+   subtrees, priorities, tags — *done*
 4. **Rich content** — tables, lists/checkboxes, links, timestamps, markup, drawers
 5. **Agenda** — multi-file views, sparse trees, custom keywords, dependencies
 6. **Organize** — capture, refile, archive

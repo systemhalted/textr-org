@@ -106,6 +106,12 @@ pub enum TodoState { Todo, Done } // custom keyword sets, priorities, tags → M
 pub trait StructureProvider {
     fn parse(&self, doc: &Document) -> Outline;
     fn cycle_todo(&self, doc: &mut Document, line: usize); // None → TODO → DONE → None
+    fn marker(&self) -> u8;                // '*' / '#' — the format primitives that let…
+    fn max_level(&self) -> Option<usize>;  // None / Some(6)
+    // …the structural-edit operations be DEFAULT METHODS, written once for every format:
+    // promote/demote_heading, promote/demote_subtree, move_subtree_up/down,
+    // insert_sibling, cycle_priority, set_tags — all returning an EditOutcome
+    // (Changed { cursor_line } | NoOp(reason)).
 }
 
 pub struct OrgProvider;      // recognizes ^(\*+) +(?:(TODO|DONE) +)?(rest)$

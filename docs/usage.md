@@ -38,6 +38,12 @@ torg notes.org ideas.org  # several files — the first is shown, Alt+N reaches 
 | `Tab` | On a heading line, fold/unfold its subtree. Elsewhere, insert a tab (displayed at 4-column tab stops). |
 | `Ctrl+N` / `Ctrl+P` | Jump to the next / previous heading. |
 | `Ctrl+T` | Cycle the current heading's keyword: none → `TODO` → `DONE` → none. |
+| `Alt+←` / `Alt+→` | Promote / demote the current heading (children keep their level). |
+| `Alt+Shift+←` / `Alt+Shift+→` | Promote / demote the whole subtree. |
+| `Alt+↑` / `Alt+↓` | Move the subtree up / down among its same-level siblings. |
+| `Alt+Enter` | Insert a sibling heading after the current subtree (`Alt+Shift+Enter`: a `TODO` one). |
+| `Shift+↑` / `Shift+↓` | Raise / lower the heading's priority: none ↔ `[#C]` ↔ `[#B]` ↔ `[#A]`. |
+| `Ctrl+G` | Edit the heading's tags (space-separated in the prompt; empty removes them). |
 | `Ctrl+S` | Save (opens the *Save As* prompt for an untitled buffer). |
 | `Ctrl+O` | Open a file (or switch to it, if it is already open). |
 | `Alt+N` / `Alt+P` | Switch to the next / previous buffer (wraps around). |
@@ -60,6 +66,28 @@ next heading of the same or a shallower level.
 
 The outline is re-read as you type, so turning a line into a heading (or editing one) updates
 folding and navigation immediately.
+
+## Structure editing
+
+The tree itself is editable, in both formats. Every command below acts on the **current
+heading** — the one whose subtree contains the cursor — and reports on the status line when
+it refuses (top level, Markdown's level-6 ceiling, no sibling to swap with, not inside any
+subtree).
+
+- **Promote / demote** — `Alt+←` / `Alt+→` shift just the heading's level; add `Shift` to
+  carry the whole subtree along. In Markdown a demote that would push any heading past
+  `######` is refused.
+- **Move** — `Alt+↑` / `Alt+↓` swap the subtree with its previous / next same-level sibling;
+  the cursor travels with it. A subtree can't leave its parent.
+- **Insert** — `Alt+Enter` opens a new sibling heading after the current subtree and puts the
+  cursor on it, ready for a title; `Alt+Shift+Enter` starts it as `TODO`. (For a child,
+  insert a sibling and `Alt+→` it.) In a buffer without headings it starts a level-1 heading
+  at the end.
+- **Priorities** — `Shift+↑` / `Shift+↓` cycle a `[#A]`/`[#B]`/`[#C]` cookie after the TODO
+  keyword: `* TODO [#A] task`. Cycling stops at the ends (`Shift+↑` on `[#A]` does nothing).
+- **Tags** — `Ctrl+G` prompts for space-separated tags and writes them at the end of the
+  headline as `:work:urgent:`. Tags may use letters, digits, and `_ @ # %`; an empty prompt
+  removes the run. Tags and priorities are parsed as data — the agenda (M5) will use them.
 
 ## File formats
 
@@ -127,6 +155,5 @@ This is the first runnable milestone; several things are deliberately out of sco
 - **No line wrapping** — long lines are clipped at the right edge (no horizontal scroll).
 - **Cursor drift on wide/combining characters** — the cursor is placed by character count, so
   full-width CJK or grapheme clusters can misalign visually.
-- **Structure basics only** — no promote/demote or subtree moves, no tables, timestamps,
-  agenda, source-block execution, or export yet. See [`roadmap.md`](roadmap.md) for where these
-  land (M3–M10).
+- **No tables, timestamps, agenda, source-block execution, or export yet** — see
+  [`roadmap.md`](roadmap.md) for where these land (M4–M10).

@@ -31,8 +31,8 @@ manual's core chapters, and the milestone that owns it. ✅ = shipped.
 | TODO keywords: basic `TODO`/`DONE` cycling | M2 ✅ |
 | Multiple files in one session (buffers, switching) | M2 ✅ (landed early) |
 | Second format (Markdown) through the same trait | M3 ✅ |
-| Structure editing: promote/demote, move subtree, insert headings | M3 |
-| Priorities (`[#A]`), tag syntax + tag editing | M3 |
+| Structure editing: promote/demote, move subtree, insert headings | M3 ✅ |
+| Priorities (`[#A]`), tag syntax + tag editing | M3 ✅ |
 | Plain lists: bullets, checkboxes, `[1/3]` statistics cookies | M4 |
 | Tables: editor with alignment + spreadsheet formulas | M4 |
 | Hyperlinks: `[[link][desc]]`, internal + external, follow | M4 |
@@ -62,7 +62,7 @@ manual's core chapters, and the milestone that owns it. ✅ = shipped.
 flowchart TD
     M1["M1 · Core document model ✅"]
     M1 --> M2["M2 · Runnable TUI + Org outline core ✅<br/>fold · nav · TODO cycle · multi-buffer"]
-    M2 --> M3["M3 · Markdown provider ✅ + structural editing (current)<br/>promote/demote · move subtree · insert · priorities · tags"]
+    M2 --> M3["M3 · Markdown provider + structural editing ✅<br/>promote/demote · move subtree · insert · priorities · tags"]
     M3 --> M4["M4 · Rich content<br/>tables · lists/checkboxes · links · timestamps · markup · drawers"]
     M4 --> M5["M5 · Agenda<br/>multi-file views · sparse trees · custom keywords · dependencies"]
     M5 --> M6["M6 · Organize<br/>capture · refile · archive"]
@@ -84,17 +84,18 @@ surface for folding, heading navigation, and `TODO`/`DONE` cycling. Multi-buffer
 (several files per session, cycling, a buffer list, close/quit guards) landed here too,
 ahead of its original M5 slot. Full design: [`milestone-2-tui.md`](milestone-2-tui.md).
 
-### M3 — Markdown provider + structural editing *(current)*
+### M3 — Markdown provider + structural editing *(done)*
 The **fast-follow that proves the trait is genuinely format-agnostic**: a second
 `StructureProvider` for Markdown (`#` ATX headings), landing alongside the first structural
 edits — promote/demote a heading or subtree, move a subtree up/down, insert sibling headings —
 plus TODO priorities (`[#A]`/`[#B]`/`[#C]`) and tag syntax with a tag-editing prompt. Both
 formats exercise the same operations from day one.
 
-*Status: the Markdown provider half is **shipped** — `MarkdownProvider` (fence-aware ATX
-parsing) plus `Format`/`detect_format` select structure per buffer by extension, cashing in
-the "second provider validates the trait" bet. Structural editing, priorities, and tags are
-in progress.*
+*Status: **shipped**, in two halves. `MarkdownProvider` (fence-aware ATX parsing) plus
+`Format`/`detect_format` select structure per buffer by extension; then the structural-edit
+operations landed as `StructureProvider` default methods over two per-format primitives
+(marker byte, max level) — written once, working identically in Org and Markdown, which is
+the "second provider validates the trait" bet fully cashed in.*
 
 ### M4 — Rich content
 Everything inside an entry parsed as data rather than plain text: tables (editor with column

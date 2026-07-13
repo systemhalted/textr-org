@@ -11,7 +11,8 @@ use std::path::{Path, PathBuf};
 use crossterm::event::{KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
 use textr_org_core::document::Document;
 use textr_org_core::structure::{
-    detect_format, next_heading, prev_heading, EditOutcome, Format, Outline, StructureProvider,
+    detect_format, is_valid_tag, next_heading, prev_heading, EditOutcome, Format, Outline,
+    StructureProvider,
 };
 use textr_org_core::view::View;
 
@@ -29,6 +30,8 @@ pub enum Mode {
     SaveAs { input: String },
     /// The *Open* prompt is open; `input` is the path typed so far.
     OpenFile { input: String },
+    /// The *Tags* prompt is open; `input` is the space-separated tags typed so far.
+    EditTags { input: String },
     /// The buffer list is open; `selected` is the highlighted entry.
     BufferList { selected: usize },
     /// Asking whether to close the active (unsaved) buffer: `y` discards, `n`/Esc cancels.
@@ -186,7 +189,9 @@ impl App {
                     self.apply(action);
                 }
             }
-            Mode::SaveAs { .. } | Mode::OpenFile { .. } => self.handle_prompt_key(key),
+            Mode::SaveAs { .. } | Mode::OpenFile { .. } | Mode::EditTags { .. } => {
+                self.handle_prompt_key(key)
+            }
             Mode::BufferList { .. } => self.handle_bufferlist_key(key),
             Mode::ConfirmClose | Mode::ConfirmQuit => self.handle_confirm_key(key),
         }
@@ -321,8 +326,19 @@ impl App {
         }
     }
 
-    /// `Ctrl+G`: open the tags prompt (implemented with Mode::EditTags in the next task).
-    fn open_tags_prompt(&mut self) {}
+    /// `Ctrl+G`: open the tags prompt pre-filled with the enclosing heading's tags.
+    fn open_tags_prompt(&mut self) {
+        let b = self.buf();
+        let line = b.view.cursor_line();
+        match b.outline.headings.iter().rev().find(|h| h.line <= line) {
+            Some(h) => {
+                self.mode = Mode::EditTags {
+                    input: h.tags.join(" "),
+                };
+            }
+            None => self.status = "Not inside a heading's subtree".into(),
+        }
+    }
 
     /// Remove the active buffer, keeping the invariants: the list never empties (a fresh
     /// untitled buffer replaces the last one) and `active` stays in bounds.
@@ -430,9 +446,21 @@ impl App {
     // ---- the bottom-line prompts (Save As / Open) --------------------------
 
     fn handle_prompt_key(&mut self, key: KeyEvent) {
-        let is_save = matches!(self.mode, Mode::SaveAs { .. });
+        enum Kind {
+            SaveAs,
+            Open,
+            Tags,
+        }
+        let kind = match &self.mode {
+            Mode::SaveAs { .. } => Kind::SaveAs,
+            Mode::OpenFile { .. } => Kind::Open,
+            Mode::EditTags { .. } => Kind::Tags,
+            _ => return,
+        };
         let event = match &mut self.mode {
-            Mode::SaveAs { input } | Mode::OpenFile { input } => prompt_event(input, key),
+            Mode::SaveAs { input } | Mode::OpenFile { input } | Mode::EditTags { input } => {
+                prompt_event(input, key)
+            }
             _ => return,
         };
         match event {
@@ -440,16 +468,38 @@ impl App {
             PromptEvent::Cancelled => self.mode = Mode::Edit,
             PromptEvent::Submitted(text) => {
                 self.mode = Mode::Edit;
-                let path = PathBuf::from(text);
-                if path.as_os_str().is_empty() {
-                    return;
-                }
-                if is_save {
-                    self.save_as(&path);
-                } else {
-                    self.open_path(path);
+                match kind {
+                    Kind::Tags => self.apply_tags(&text),
+                    Kind::SaveAs | Kind::Open => {
+                        let path = PathBuf::from(text);
+                        if path.as_os_str().is_empty() {
+                            return;
+                        }
+                        if matches!(kind, Kind::SaveAs) {
+                            self.save_as(&path);
+                        } else {
+                            self.open_path(path);
+                        }
+                    }
                 }
             }
+        }
+    }
+
+    /// Validate and write the space-separated tags typed into the prompt.
+    fn apply_tags(&mut self, text: &str) {
+        let tags: Vec<String> = text.split_whitespace().map(str::to_string).collect();
+        if let Some(bad) = tags.iter().find(|t| !is_valid_tag(t)) {
+            self.status = format!("Invalid tag {bad:?} — use letters, digits, _ @ # %");
+            self.mode = Mode::EditTags {
+                input: text.to_string(),
+            };
+            return;
+        }
+        let b = self.buf_mut();
+        match b.format.set_tags(&mut b.doc, b.view.cursor_line(), &tags) {
+            EditOutcome::Changed { .. } => self.reparse(),
+            EditOutcome::NoOp(msg) => self.status = msg.into(),
         }
     }
 
@@ -782,6 +832,50 @@ mod tests {
         let mut app = single(Document::from_text("# A\n"), Some(PathBuf::from("x.md")));
         alt_key(&mut app, KeyCode::Right);
         assert_eq!(app.document().text(), "## A\n");
+    }
+
+    #[test]
+    fn ctrl_g_prefills_edits_and_writes_tags() {
+        let mut app = single(Document::from_text("* task :old:\n"), None);
+        ctrl(&mut app, 'g');
+        assert_eq!(app.mode(), &Mode::EditTags { input: "old".into() });
+        for _ in 0..3 {
+            press(&mut app, KeyCode::Backspace); // clear "old"
+        }
+        typ(&mut app, "work urgent");
+        press(&mut app, KeyCode::Enter);
+        assert_eq!(app.mode(), &Mode::Edit);
+        assert_eq!(app.document().text(), "* task :work:urgent:\n");
+    }
+
+    #[test]
+    fn empty_tags_input_removes_the_tag_run() {
+        let mut app = single(Document::from_text("* task :old:\n"), None);
+        ctrl(&mut app, 'g');
+        for _ in 0..3 {
+            press(&mut app, KeyCode::Backspace);
+        }
+        press(&mut app, KeyCode::Enter);
+        assert_eq!(app.document().text(), "* task\n");
+    }
+
+    #[test]
+    fn invalid_tag_characters_keep_the_prompt_open_with_a_message() {
+        let mut app = single(Document::from_text("* task\n"), None);
+        ctrl(&mut app, 'g');
+        typ(&mut app, "bad!tag");
+        press(&mut app, KeyCode::Enter);
+        assert!(matches!(app.mode(), Mode::EditTags { .. })); // still prompting
+        assert!(!app.status().is_empty());
+        assert_eq!(app.document().text(), "* task\n");
+    }
+
+    #[test]
+    fn ctrl_g_off_any_heading_is_a_status_noop() {
+        let mut app = single(Document::from_text("prose only\n"), None);
+        ctrl(&mut app, 'g');
+        assert_eq!(app.mode(), &Mode::Edit);
+        assert!(!app.status().is_empty());
     }
 
     #[test]

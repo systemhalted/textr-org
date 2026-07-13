@@ -145,6 +145,10 @@ fn place_cursor(frame: &mut Frame, app: &App, body: Rect, status: Rect, cursor: 
             let col = "Open: ".len() + input.chars().count();
             frame.set_cursor_position(Position::new(status.x + col as u16, status.y));
         }
+        Mode::EditTags { input } => {
+            let col = "Tags: ".len() + input.chars().count();
+            frame.set_cursor_position(Position::new(status.x + col as u16, status.y));
+        }
         // No cursor while picking from the buffer list or answering a confirmation.
         Mode::BufferList { .. } | Mode::ConfirmClose | Mode::ConfirmQuit => {}
     }
@@ -160,6 +164,7 @@ fn status_text(app: &App) -> String {
     match app.mode() {
         Mode::SaveAs { input } => return format!("Save as: {input}"),
         Mode::OpenFile { input } => return format!("Open: {input}"),
+        Mode::EditTags { input } => return format!("Tags: {input}"),
         Mode::BufferList { .. } => {
             return " Buffers — ↑/↓ or 1-9 select · Enter switch · Esc cancel ".to_string()
         }

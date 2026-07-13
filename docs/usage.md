@@ -41,7 +41,8 @@ torg notes.org ideas.org  # several files — the first is shown, Alt+N reaches 
 | `Alt+←` / `Alt+→` | Promote / demote the current heading (children keep their level). |
 | `Alt+Shift+←` / `Alt+Shift+→` | Promote / demote the whole subtree. |
 | `Alt+↑` / `Alt+↓` | Move the subtree up / down among its same-level siblings. |
-| `Alt+Enter` | Insert a sibling heading after the current subtree (`Alt+Shift+Enter`: a `TODO` one). |
+| `Alt+Enter` | Insert a sibling heading after the current subtree. |
+| `Alt+T` (or `Alt+Shift+Enter`*) | Insert a `TODO` sibling heading. |
 | `Shift+↑` / `Shift+↓` | Raise / lower the heading's priority: none ↔ `[#C]` ↔ `[#B]` ↔ `[#A]`. |
 | `Ctrl+G` | Edit the heading's tags (space-separated in the prompt; empty removes them). |
 | `Ctrl+S` | Save (opens the *Save As* prompt for an untitled buffer). |
@@ -80,9 +81,11 @@ subtree).
 - **Move** — `Alt+↑` / `Alt+↓` swap the subtree with its previous / next same-level sibling;
   the cursor travels with it. A subtree can't leave its parent.
 - **Insert** — `Alt+Enter` opens a new sibling heading after the current subtree and puts the
-  cursor on it, ready for a title; `Alt+Shift+Enter` starts it as `TODO`. (For a child,
-  insert a sibling and `Alt+→` it.) In a buffer without headings it starts a level-1 heading
-  at the end.
+  cursor on it, ready for a title; `Alt+T` starts it as `TODO`. (For a child, insert a
+  sibling and `Alt+→` it.) In a buffer without headings it starts a level-1 heading at the
+  end. \* `Alt+Shift+Enter` also inserts a `TODO` sibling, but only in terminals with
+  extended keyboard reporting — `Shift+Enter` has no classic escape sequence, so most
+  terminals (and tmux) can't transmit it; `Alt+T` always works.
 - **Priorities** — `Shift+↑` / `Shift+↓` cycle a `[#A]`/`[#B]`/`[#C]` cookie after the TODO
   keyword: `* TODO [#A] task`. Cycling stops at the ends (`Shift+↑` on `[#A]` does nothing).
 - **Tags** — `Ctrl+G` prompts for space-separated tags and writes them at the end of the

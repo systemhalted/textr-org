@@ -100,10 +100,13 @@ pub fn key_to_action(key: KeyEvent) -> Option<Action> {
             'g' => Some(Action::EditTags),
             _ => None,
         },
-        // Alt chords: buffer commands (echoing Ctrl+N/P's heading navigation).
+        // Alt chords: buffer commands (echoing Ctrl+N/P's heading navigation), plus the
+        // TODO-sibling alias — Shift+Enter has no legacy escape sequence, so Alt+Shift+Enter
+        // never reaches the app in many terminals.
         KeyCode::Char(c) if alt => match c {
             'n' => Some(Action::NextBuffer),
             'p' => Some(Action::PrevBuffer),
+            't' => Some(Action::InsertTodoSibling),
             _ => None,
         },
         // Any other printable char (incl. Shift for capitals) is inserted.
@@ -177,6 +180,13 @@ mod tests {
     fn alt_n_and_alt_p_cycle_buffers() {
         assert_eq!(key_to_action(alt('n')), Some(Action::NextBuffer));
         assert_eq!(key_to_action(alt('p')), Some(Action::PrevBuffer));
+    }
+
+    #[test]
+    fn alt_t_is_the_reachable_todo_sibling_alias() {
+        // Shift+Enter has no legacy escape sequence, so Alt+Shift+Enter never arrives in
+        // many terminals; Alt+T must always work.
+        assert_eq!(key_to_action(alt('t')), Some(Action::InsertTodoSibling));
     }
 
     #[test]

@@ -11,7 +11,7 @@ use std::path::{Path, PathBuf};
 use crossterm::event::{KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
 use textr_org_core::document::Document;
 use textr_org_core::structure::{
-    detect_format, next_heading, prev_heading, Outline, StructureProvider,
+    detect_format, next_heading, prev_heading, EditOutcome, Format, Outline, StructureProvider,
 };
 use textr_org_core::view::View;
 
@@ -278,10 +278,51 @@ impl App {
                     self.close_active_buffer();
                 }
             }
-            // Wired in the next step of the plan (Task 10/11).
-            _ => {}
+            Action::PromoteHeading => self.structure_edit(|f, d, l| f.promote_heading(d, l)),
+            Action::DemoteHeading => self.structure_edit(|f, d, l| f.demote_heading(d, l)),
+            Action::PromoteSubtree => self.structure_edit(|f, d, l| f.promote_subtree(d, l)),
+            Action::DemoteSubtree => self.structure_edit(|f, d, l| f.demote_subtree(d, l)),
+            Action::MoveSubtreeUp => self.structure_edit(|f, d, l| f.move_subtree_up(d, l)),
+            Action::MoveSubtreeDown => self.structure_edit(|f, d, l| f.move_subtree_down(d, l)),
+            Action::InsertSibling => self.insert_sibling(false),
+            Action::InsertTodoSibling => self.insert_sibling(true),
+            Action::PriorityUp => self.structure_edit(|f, d, l| f.cycle_priority(d, l, true)),
+            Action::PriorityDown => self.structure_edit(|f, d, l| f.cycle_priority(d, l, false)),
+            Action::EditTags => self.open_tags_prompt(),
         }
     }
+
+    // ---- structural editing -------------------------------------------------
+
+    /// Run a structural edit on the active buffer, then sync cursor, status, and outline.
+    fn structure_edit(&mut self, op: impl FnOnce(Format, &mut Document, usize) -> EditOutcome) {
+        let b = self.buf_mut();
+        match op(b.format, &mut b.doc, b.view.cursor_line()) {
+            EditOutcome::Changed { cursor_line } => {
+                let b = self.buf_mut();
+                b.view.move_to_line(&b.doc, cursor_line);
+                self.reparse();
+            }
+            EditOutcome::NoOp(msg) => self.status = msg.into(),
+        }
+    }
+
+    /// Insert a sibling heading and leave the cursor at the end of its (empty) title.
+    fn insert_sibling(&mut self, todo: bool) {
+        let b = self.buf_mut();
+        match b.format.insert_sibling(&mut b.doc, b.view.cursor_line(), todo) {
+            EditOutcome::Changed { cursor_line } => {
+                let b = self.buf_mut();
+                b.view.move_to_line(&b.doc, cursor_line);
+                b.view.move_end(&b.doc);
+                self.reparse();
+            }
+            EditOutcome::NoOp(msg) => self.status = msg.into(),
+        }
+    }
+
+    /// `Ctrl+G`: open the tags prompt (implemented with Mode::EditTags in the next task).
+    fn open_tags_prompt(&mut self) {}
 
     /// Remove the active buffer, keeping the invariants: the list never empties (a fresh
     /// untitled buffer replaces the last one) and `active` stays in bounds.
@@ -677,6 +718,70 @@ mod tests {
         assert!(!app.is_folded_heading(0)); // "* A" is not a Markdown heading
         assert!(!app.is_hidden(1));
         let _ = std::fs::remove_file(&path);
+    }
+
+    // ---- structural editing ---------------------------------------------------
+
+    fn alt_key(app: &mut App, code: KeyCode) {
+        app.handle_key(KeyEvent::new(code, KeyModifiers::ALT));
+    }
+    fn alt_shift(app: &mut App, code: KeyCode) {
+        app.handle_key(KeyEvent::new(code, KeyModifiers::ALT | KeyModifiers::SHIFT));
+    }
+    fn shift_key(app: &mut App, code: KeyCode) {
+        app.handle_key(KeyEvent::new(code, KeyModifiers::SHIFT));
+    }
+
+    #[test]
+    fn alt_arrows_promote_demote_and_move() {
+        let mut app = single(Document::from_text("** A\nbody\n** B\n"), None);
+        alt_key(&mut app, KeyCode::Left);
+        assert_eq!(app.document().text(), "* A\nbody\n** B\n");
+        alt_key(&mut app, KeyCode::Right);
+        alt_key(&mut app, KeyCode::Down); // A's subtree past B's
+        assert_eq!(app.document().text(), "** B\n** A\nbody\n");
+        assert_eq!(app.view().cursor_line(), 1); // cursor followed A
+    }
+
+    #[test]
+    fn alt_shift_arrows_shift_the_whole_subtree() {
+        let mut app = single(Document::from_text("* A\n** child\n"), None);
+        alt_shift(&mut app, KeyCode::Right);
+        assert_eq!(app.document().text(), "** A\n*** child\n");
+    }
+
+    #[test]
+    fn refused_edits_show_the_reason_on_the_status_line() {
+        let mut app = single(Document::from_text("* top\n"), None);
+        alt_key(&mut app, KeyCode::Left);
+        assert_eq!(app.document().text(), "* top\n");
+        assert!(!app.status().is_empty());
+    }
+
+    #[test]
+    fn alt_enter_inserts_a_sibling_and_puts_the_cursor_on_it() {
+        let mut app = single(Document::from_text("* A\nbody\n"), None);
+        alt_key(&mut app, KeyCode::Enter);
+        assert_eq!(app.document().text(), "* A\nbody\n* \n");
+        assert_eq!(app.view().cursor_line(), 2);
+        typ(&mut app, "typed title");
+        assert_eq!(app.document().text(), "* A\nbody\n* typed title\n");
+    }
+
+    #[test]
+    fn shift_arrows_cycle_priority() {
+        let mut app = single(Document::from_text("* TODO t\n"), None);
+        shift_key(&mut app, KeyCode::Up);
+        assert_eq!(app.document().text(), "* TODO [#C] t\n");
+        shift_key(&mut app, KeyCode::Down);
+        assert_eq!(app.document().text(), "* TODO t\n");
+    }
+
+    #[test]
+    fn structural_edits_respect_the_buffer_format() {
+        let mut app = single(Document::from_text("# A\n"), Some(PathBuf::from("x.md")));
+        alt_key(&mut app, KeyCode::Right);
+        assert_eq!(app.document().text(), "## A\n");
     }
 
     #[test]

@@ -49,6 +49,11 @@ pub enum Action {
     PriorityUp,
     PriorityDown,
     EditTags,
+    // dates
+    SetScheduled,
+    SetDeadline,
+    InsertActiveTs,
+    InsertInactiveTs,
 }
 
 /// Map a key press to an [`Action`], or `None` if the key is unbound.
@@ -107,6 +112,10 @@ pub fn key_to_action(key: KeyEvent) -> Option<Action> {
             'n' => Some(Action::NextBuffer),
             'p' => Some(Action::PrevBuffer),
             't' => Some(Action::InsertTodoSibling),
+            's' => Some(Action::SetScheduled),
+            'd' => Some(Action::SetDeadline),
+            '.' => Some(Action::InsertActiveTs),
+            'i' => Some(Action::InsertInactiveTs),
             _ => None,
         },
         // Any other printable char (incl. Shift for capitals) is inserted.
@@ -180,6 +189,22 @@ mod tests {
     fn alt_n_and_alt_p_cycle_buffers() {
         assert_eq!(key_to_action(alt('n')), Some(Action::NextBuffer));
         assert_eq!(key_to_action(alt('p')), Some(Action::PrevBuffer));
+    }
+
+    #[test]
+    fn timestamp_command_chords_map() {
+        assert_eq!(key_to_action(alt('s')), Some(Action::SetScheduled));
+        assert_eq!(key_to_action(alt('d')), Some(Action::SetDeadline));
+        assert_eq!(key_to_action(alt('.')), Some(Action::InsertActiveTs));
+        assert_eq!(key_to_action(alt('i')), Some(Action::InsertInactiveTs));
+    }
+
+    #[test]
+    fn shift_arrows_still_map_to_priority() {
+        // Date-shift vs priority is decided in the app layer by cursor context, so the pure
+        // keymap still yields the priority actions.
+        assert_eq!(key_to_action(shift(KeyCode::Up)), Some(Action::PriorityUp));
+        assert_eq!(key_to_action(shift(KeyCode::Down)), Some(Action::PriorityDown));
     }
 
     #[test]

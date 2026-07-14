@@ -3,12 +3,22 @@
 //! backend. Everything here derives from `&App`; it never mutates.
 
 use ratatui::layout::{Position, Rect};
-use ratatui::style::{Modifier, Style};
-use ratatui::text::Line;
+use ratatui::style::{Color, Modifier, Style};
+use ratatui::text::{Line, Span};
 use ratatui::widgets::Paragraph;
 use ratatui::Frame;
+use textr_org_core::timestamp::find_timestamps;
 
-use crate::app::{App, Mode};
+use crate::app::{App, DatePurpose, Mode};
+
+/// The status-line prefix for a date prompt.
+fn date_prompt_label(purpose: DatePurpose) -> &'static str {
+    match purpose {
+        DatePurpose::Scheduled => "Scheduled: ",
+        DatePurpose::Deadline => "Deadline: ",
+        DatePurpose::InsertActive | DatePurpose::InsertInactive => "Timestamp: ",
+    }
+}
 
 /// Draw the whole editor: the (fold-aware) text body, then the status line, then place the
 /// real hardware cursor.
@@ -111,12 +121,12 @@ fn draw_body(frame: &mut Frame, app: &App, body: Rect) -> Option<(u16, u16)> {
         if app.is_folded_heading(doc_line) {
             text.push_str(" …"); // a collapsed subtree
         }
-        let style = if is_heading(app, doc_line) {
+        let base = if is_heading(app, doc_line) {
             Style::default().add_modifier(Modifier::BOLD)
         } else {
             Style::default()
         };
-        lines.push(Line::styled(text, style));
+        lines.push(highlight_line(&text, base));
         doc_line += 1;
     }
 
@@ -149,6 +159,10 @@ fn place_cursor(frame: &mut Frame, app: &App, body: Rect, status: Rect, cursor: 
             let col = "Tags: ".len() + input.chars().count();
             frame.set_cursor_position(Position::new(status.x + col as u16, status.y));
         }
+        Mode::DatePrompt { input, purpose } => {
+            let col = date_prompt_label(*purpose).len() + input.chars().count();
+            frame.set_cursor_position(Position::new(status.x + col as u16, status.y));
+        }
         // No cursor while picking from the buffer list or answering a confirmation.
         Mode::BufferList { .. } | Mode::ConfirmClose | Mode::ConfirmQuit => {}
     }
@@ -158,6 +172,42 @@ fn is_heading(app: &App, line: usize) -> bool {
     app.outline().headings.iter().any(|h| h.line == line)
 }
 
+/// Build a display line from already-tab-expanded `text`, styling any timestamps and the
+/// `SCHEDULED:`/`DEADLINE:` planning keywords over the `base` style. Timestamps carry no
+/// tabs, so the byte ranges from `find_timestamps` line up with the expanded text.
+fn highlight_line(text: &str, base: Style) -> Line<'static> {
+    let ts_style = base.fg(Color::Cyan).add_modifier(Modifier::UNDERLINED);
+    let kw_style = base.fg(Color::Yellow);
+    let mut spans: Vec<Span> = Vec::new();
+    let mut cut = 0;
+    // Planning keywords first (they precede their timestamps on the line).
+    for kw in ["SCHEDULED:", "DEADLINE:"] {
+        if let Some(i) = text.find(kw) {
+            push_plain(&mut spans, &text[cut..i.max(cut)], base);
+            if i >= cut {
+                spans.push(Span::styled(kw.to_string(), kw_style));
+                cut = i + kw.len();
+            }
+        }
+    }
+    for (s, e) in find_timestamps(text) {
+        if s < cut {
+            continue; // already inside an emitted span
+        }
+        push_plain(&mut spans, &text[cut..s], base);
+        spans.push(Span::styled(text[s..e].to_string(), ts_style));
+        cut = e;
+    }
+    push_plain(&mut spans, &text[cut..], base);
+    Line::from(spans)
+}
+
+fn push_plain(spans: &mut Vec<Span<'static>>, text: &str, base: Style) {
+    if !text.is_empty() {
+        spans.push(Span::styled(text.to_string(), base));
+    }
+}
+
 /// The status-line text: the Save-As prompt, or `[i/n] name[*] — line:col` plus any transient
 /// message (the `[i/n]` buffer position appears only when more than one file is open).
 fn status_text(app: &App) -> String {
@@ -165,6 +215,9 @@ fn status_text(app: &App) -> String {
         Mode::SaveAs { input } => return format!("Save as: {input}"),
         Mode::OpenFile { input } => return format!("Open: {input}"),
         Mode::EditTags { input } => return format!("Tags: {input}"),
+        Mode::DatePrompt { input, purpose } => {
+            return format!("{}{input}", date_prompt_label(*purpose))
+        }
         Mode::BufferList { .. } => {
             return " Buffers — ↑/↓ or 1-9 select · Enter switch · Esc cancel ".to_string()
         }
@@ -220,6 +273,23 @@ mod tests {
         assert_eq!(display_col("ab\tx", 3), 4);
         // No tabs: identity.
         assert_eq!(display_col("plain", 3), 3);
+    }
+
+    #[test]
+    fn highlight_line_splits_out_timestamps_and_keeps_the_full_text() {
+        let line = highlight_line("SCHEDULED: <2024-01-15 Mon>", Style::default());
+        // The reassembled spans equal the original text (nothing dropped or duplicated).
+        let joined: String = line.spans.iter().map(|s| s.content.as_ref()).collect();
+        assert_eq!(joined, "SCHEDULED: <2024-01-15 Mon>");
+        // At least three spans: the keyword, the gap, and the timestamp.
+        assert!(line.spans.len() >= 3);
+    }
+
+    #[test]
+    fn highlight_line_leaves_plain_text_as_one_span() {
+        let line = highlight_line("just prose", Style::default());
+        let joined: String = line.spans.iter().map(|s| s.content.as_ref()).collect();
+        assert_eq!(joined, "just prose");
     }
 
     #[test]

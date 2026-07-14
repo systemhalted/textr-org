@@ -11,9 +11,10 @@ use std::path::{Path, PathBuf};
 use crossterm::event::{KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
 use textr_org_core::document::Document;
 use textr_org_core::structure::{
-    detect_format, is_valid_tag, next_heading, prev_heading, EditOutcome, Format, Outline,
-    StructureProvider,
+    detect_format, is_valid_tag, next_heading, prev_heading, shift_timestamp, EditOutcome, Format,
+    Outline, Planning, StructureProvider,
 };
+use textr_org_core::timestamp::{parse_timestamp, Timestamp};
 use textr_org_core::view::View;
 
 use crate::action::{key_to_action, Action};
@@ -38,6 +39,18 @@ pub enum Mode {
     ConfirmClose,
     /// Asking whether to quit despite unsaved buffers: `y` quits, `n`/Esc cancels.
     ConfirmQuit,
+    /// A date prompt is open; `input` is the timestamp typed so far and `purpose` is what to
+    /// do with it on submit.
+    DatePrompt { input: String, purpose: DatePurpose },
+}
+
+/// What a [`Mode::DatePrompt`] does with the date the user types.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum DatePurpose {
+    Scheduled,
+    Deadline,
+    InsertActive,
+    InsertInactive,
 }
 
 /// What a key press did to a bottom-line prompt.
@@ -48,6 +61,21 @@ enum PromptEvent {
     Cancelled,
     /// Enter — act on the typed text.
     Submitted(String),
+}
+
+/// Parse a date typed into the prompt (with or without brackets) into a timestamp whose
+/// active/inactive flag matches `purpose`. `None` if it isn't a valid, fully-consumed stamp.
+fn parse_date_input(text: &str, purpose: DatePurpose) -> Option<Timestamp> {
+    let active = !matches!(purpose, DatePurpose::InsertInactive);
+    let wrapped = if text.starts_with(['<', '[']) {
+        text.to_string()
+    } else if active {
+        format!("<{text}>")
+    } else {
+        format!("[{text}]")
+    };
+    let (ts, len) = parse_timestamp(&wrapped)?;
+    (len == wrapped.len()).then_some(ts)
 }
 
 /// Drive a prompt's input with one key press. Ctrl/Alt-modified characters are ignored so
@@ -189,9 +217,10 @@ impl App {
                     self.apply(action);
                 }
             }
-            Mode::SaveAs { .. } | Mode::OpenFile { .. } | Mode::EditTags { .. } => {
-                self.handle_prompt_key(key)
-            }
+            Mode::SaveAs { .. }
+            | Mode::OpenFile { .. }
+            | Mode::EditTags { .. }
+            | Mode::DatePrompt { .. } => self.handle_prompt_key(key),
             Mode::BufferList { .. } => self.handle_bufferlist_key(key),
             Mode::ConfirmClose | Mode::ConfirmQuit => self.handle_confirm_key(key),
         }
@@ -291,9 +320,29 @@ impl App {
             Action::MoveSubtreeDown => self.structure_edit(|f, d, l| f.move_subtree_down(d, l)),
             Action::InsertSibling => self.insert_sibling(false),
             Action::InsertTodoSibling => self.insert_sibling(true),
-            Action::PriorityUp => self.structure_edit(|f, d, l| f.cycle_priority(d, l, true)),
-            Action::PriorityDown => self.structure_edit(|f, d, l| f.cycle_priority(d, l, false)),
+            Action::PriorityUp => self.shift_date_or_priority(true),
+            Action::PriorityDown => self.shift_date_or_priority(false),
             Action::EditTags => self.open_tags_prompt(),
+            Action::SetScheduled => self.open_date_prompt(DatePurpose::Scheduled),
+            Action::SetDeadline => self.open_date_prompt(DatePurpose::Deadline),
+            Action::InsertActiveTs => self.open_date_prompt(DatePurpose::InsertActive),
+            Action::InsertInactiveTs => self.open_date_prompt(DatePurpose::InsertInactive),
+        }
+    }
+
+    /// `Shift+↑/↓`: shift the timestamp field under the cursor if there is one, else cycle the
+    /// heading's priority — the Org overloading of these keys.
+    fn shift_date_or_priority(&mut self, up: bool) {
+        let line = self.buf().view.cursor_line();
+        let col = self.buf().view.cursor_column();
+        match shift_timestamp(&mut self.buf_mut().doc, line, col, up) {
+            Some(EditOutcome::Changed { cursor_line }) => {
+                let b = self.buf_mut();
+                b.view.move_to_line(&b.doc, cursor_line);
+                self.reparse();
+            }
+            Some(EditOutcome::NoOp(msg)) => self.status = msg.into(),
+            None => self.structure_edit(|f, d, l| f.cycle_priority(d, l, up)),
         }
     }
 
@@ -450,17 +499,20 @@ impl App {
             SaveAs,
             Open,
             Tags,
+            Date(DatePurpose),
         }
         let kind = match &self.mode {
             Mode::SaveAs { .. } => Kind::SaveAs,
             Mode::OpenFile { .. } => Kind::Open,
             Mode::EditTags { .. } => Kind::Tags,
+            Mode::DatePrompt { purpose, .. } => Kind::Date(*purpose),
             _ => return,
         };
         let event = match &mut self.mode {
-            Mode::SaveAs { input } | Mode::OpenFile { input } | Mode::EditTags { input } => {
-                prompt_event(input, key)
-            }
+            Mode::SaveAs { input }
+            | Mode::OpenFile { input }
+            | Mode::EditTags { input }
+            | Mode::DatePrompt { input, .. } => prompt_event(input, key),
             _ => return,
         };
         match event {
@@ -470,6 +522,7 @@ impl App {
                 self.mode = Mode::Edit;
                 match kind {
                     Kind::Tags => self.apply_tags(&text),
+                    Kind::Date(purpose) => self.apply_date(purpose, &text),
                     Kind::SaveAs | Kind::Open => {
                         let path = PathBuf::from(text);
                         if path.as_os_str().is_empty() {
@@ -482,6 +535,77 @@ impl App {
                         }
                     }
                 }
+            }
+        }
+    }
+
+    /// Open the date prompt for `purpose`. For scheduled/deadline (Org only) the prompt is
+    /// pre-filled with the heading's current stamp, if any.
+    fn open_date_prompt(&mut self, purpose: DatePurpose) {
+        if matches!(purpose, DatePurpose::Scheduled | DatePurpose::Deadline)
+            && self.buf().format != Format::Org
+        {
+            self.status = "SCHEDULED/DEADLINE is an Org feature".into();
+            return;
+        }
+        let input = self.existing_planning(purpose);
+        self.mode = Mode::DatePrompt { input, purpose };
+    }
+
+    /// The heading's current SCHEDULED/DEADLINE stamp as text, to pre-fill the prompt.
+    fn existing_planning(&self, purpose: DatePurpose) -> String {
+        let b = self.buf();
+        let line = b.view.cursor_line();
+        let Some(h) = b.outline.headings.iter().rev().find(|h| h.line <= line) else {
+            return String::new();
+        };
+        let ts = match purpose {
+            DatePurpose::Scheduled => h.scheduled,
+            DatePurpose::Deadline => h.deadline,
+            _ => None,
+        };
+        ts.map(|t| t.to_string()).unwrap_or_default()
+    }
+
+    /// Parse the typed date and act on it. Invalid input keeps the prompt open with a message.
+    fn apply_date(&mut self, purpose: DatePurpose, text: &str) {
+        let trimmed = text.trim();
+        // Empty input on a planning command removes that entry.
+        let ts = if trimmed.is_empty() {
+            None
+        } else {
+            match parse_date_input(trimmed, purpose) {
+                Some(ts) => Some(ts),
+                None => {
+                    self.status = "Invalid date — try 2024-01-15 or 2024-01-15 09:30".into();
+                    self.mode = Mode::DatePrompt {
+                        input: text.to_string(),
+                        purpose,
+                    };
+                    return;
+                }
+            }
+        };
+        match purpose {
+            DatePurpose::Scheduled | DatePurpose::Deadline => {
+                let which = if matches!(purpose, DatePurpose::Scheduled) {
+                    Planning::Scheduled
+                } else {
+                    Planning::Deadline
+                };
+                let b = self.buf_mut();
+                let line = b.view.cursor_line();
+                match b.format.set_planning(&mut b.doc, line, which, ts) {
+                    EditOutcome::Changed { .. } => self.reparse(),
+                    EditOutcome::NoOp(msg) => self.status = msg.into(),
+                }
+            }
+            DatePurpose::InsertActive | DatePurpose::InsertInactive => {
+                let Some(ts) = ts else { return }; // empty insert does nothing
+                let b = self.buf_mut();
+                let at = b.doc.line_to_char(b.view.cursor_line()) + b.view.cursor_column();
+                b.doc.insert(at, &ts.to_string());
+                self.reparse();
             }
         }
     }
@@ -876,6 +1000,89 @@ mod tests {
         ctrl(&mut app, 'g');
         assert_eq!(app.mode(), &Mode::Edit);
         assert!(!app.status().is_empty());
+    }
+
+    // ---- dates and scheduling -------------------------------------------------
+
+    #[test]
+    fn alt_s_prompts_then_writes_an_indented_scheduled_line() {
+        let mut app = single(Document::from_text("* Task\nbody\n"), None);
+        alt_key(&mut app, KeyCode::Char('s'));
+        assert!(matches!(app.mode(), Mode::DatePrompt { .. }));
+        typ(&mut app, "2024-01-15 09:30");
+        press(&mut app, KeyCode::Enter);
+        assert_eq!(app.mode(), &Mode::Edit);
+        assert_eq!(
+            app.document().text(),
+            "* Task\n  SCHEDULED: <2024-01-15 Mon 09:30>\nbody\n"
+        );
+    }
+
+    #[test]
+    fn an_invalid_date_keeps_the_prompt_open_with_a_message() {
+        let mut app = single(Document::from_text("* Task\n"), None);
+        alt_key(&mut app, KeyCode::Char('d'));
+        typ(&mut app, "not a date");
+        press(&mut app, KeyCode::Enter);
+        assert!(matches!(app.mode(), Mode::DatePrompt { .. }));
+        assert!(!app.status().is_empty());
+        assert_eq!(app.document().text(), "* Task\n");
+    }
+
+    #[test]
+    fn empty_date_input_removes_the_planning_entry() {
+        let mut app = single(Document::from_text("* T\n  SCHEDULED: <2024-01-15 Mon>\n"), None);
+        alt_key(&mut app, KeyCode::Char('s'));
+        assert_eq!(
+            app.mode(),
+            &Mode::DatePrompt {
+                input: "<2024-01-15 Mon>".into(),
+                purpose: DatePurpose::Scheduled,
+            }
+        );
+        // clear the prefilled value
+        for _ in 0.."<2024-01-15 Mon>".len() {
+            press(&mut app, KeyCode::Backspace);
+        }
+        press(&mut app, KeyCode::Enter);
+        assert_eq!(app.document().text(), "* T\n");
+    }
+
+    #[test]
+    fn scheduling_in_a_markdown_buffer_is_a_noop() {
+        let mut app = single(Document::from_text("# Task\n"), Some(PathBuf::from("x.md")));
+        alt_key(&mut app, KeyCode::Char('s'));
+        assert_eq!(app.mode(), &Mode::Edit);
+        assert!(!app.status().is_empty());
+    }
+
+    #[test]
+    fn alt_dot_inserts_an_active_timestamp_at_the_cursor() {
+        let mut app = single(Document::from_text("* Task\n"), None);
+        alt_key(&mut app, KeyCode::Char('.'));
+        typ(&mut app, "2024-01-15");
+        press(&mut app, KeyCode::Enter);
+        assert_eq!(app.document().text(), "<2024-01-15 Mon>* Task\n");
+    }
+
+    #[test]
+    fn shift_up_on_a_timestamp_shifts_the_date_not_the_priority() {
+        let mut app = single(Document::from_text("* T\n  SCHEDULED: <2024-01-15 Mon>\n"), None);
+        press(&mut app, KeyCode::Down); // onto the planning line
+        press(&mut app, KeyCode::End);
+        // cursor is at end; move back onto the day digits
+        press(&mut app, KeyCode::Left);
+        press(&mut app, KeyCode::Left); // onto "Mon"/day area
+        shift_key(&mut app, KeyCode::Up);
+        assert!(app.document().text().contains("2024-01-1")); // date changed, still a stamp
+        assert!(!app.document().text().contains("[#")); // no priority cookie added
+    }
+
+    #[test]
+    fn shift_up_off_a_timestamp_still_cycles_priority() {
+        let mut app = single(Document::from_text("* TODO task\n"), None);
+        shift_key(&mut app, KeyCode::Up);
+        assert_eq!(app.document().text(), "* TODO [#C] task\n");
     }
 
     #[test]

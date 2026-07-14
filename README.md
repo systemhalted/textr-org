@@ -15,10 +15,11 @@ later as an installable *package* over a stable core API.)
 
 **Runnable.** `textr-org` is a terminal editor that opens, edits, and saves multiple buffers —
 several files in one session, switched without quitting — and it understands both Org `*`
-headings and Markdown `#` headings: folding, heading navigation, and `TODO`/`DONE` cycling,
-chosen per buffer by file extension. This is Milestone 2 plus the multi-file machinery the
-roadmap points at M5 and M3's Markdown provider (structural editing remains); the longer arc
-toward full Org (agenda, source blocks, export) is in [`docs/roadmap.md`](docs/roadmap.md).
+headings and Markdown `#` headings: folding, navigation, `TODO`/`DONE` cycling, structural
+editing (promote/demote, move, priorities, tags), and Org timestamps with scheduling. This is
+Milestones 2 and 3 complete, plus the multi-file machinery from M5 and the first slice of M4
+(dates); the longer arc toward full Org (agenda, source blocks, export) is in
+[`docs/roadmap.md`](docs/roadmap.md).
 
 ```sh
 cargo run -p textr-org-tui -- notes.org
@@ -43,14 +44,18 @@ list:
   move subtrees among siblings (`Alt+↑/↓`), insert sibling headings (`Alt+Enter`), cycle
   `[#A]`/`[#B]`/`[#C]` priorities (`Shift+↑/↓`), and edit `:tags:` (`Ctrl+G`) — same
   operations in both formats, written once against the structure trait
+- **dates**: Org timestamps parse as data — active/inactive, times, ranges, repeaters; set a
+  heading's `SCHEDULED`/`DEADLINE` (`Alt+S`/`Alt+D`), insert a timestamp (`Alt+.`/`Alt+i`),
+  and shift the field under the cursor with `Shift+↑/↓`; timestamps are highlighted
 
 **The headless core (`textr-org-core`)** — a `Document` on a [`ropey`](https://crates.io/crates/ropey)
 rope (load/save/*Save As* with typed errors, char-indexed edits, a modified flag), a `View`
-(cursor + editing, goal column), and a format-agnostic `structure` layer (outline, fold
-extents, TODO cycling) behind a `StructureProvider` trait with Org and Markdown
-implementations, selected per file by `detect_format`.
+(cursor + editing, goal column), a format-agnostic `structure` layer (outline, fold
+extents, TODO cycling, structural edits) behind a `StructureProvider` trait with Org and
+Markdown implementations selected per file by `detect_format`, and a `timestamp` module
+parsing the full Org timestamp grammar (no external date crate).
 
-Everything with a branch is unit-tested (~100 tests); the terminal glue is the only untested
+Everything with a branch is unit-tested (~200 tests); the terminal glue is the only untested
 surface. New to the codebase? [`docs/tutorial.md`](docs/tutorial.md) walks through the Rust
 concepts it uses.
 
@@ -77,7 +82,7 @@ Requires a recent stable Rust toolchain (1.96+).
 
 ```sh
 cargo build
-cargo test                                    # ~100 unit tests
+cargo test                                    # ~200 unit tests
 cargo clippy --all-targets -- -D warnings
 cargo run -p textr-org-tui -- notes.org           # launch the editor
 ```
@@ -93,7 +98,7 @@ detail — including the north star of Org-mode–class structure editing for an
    buffers with switching — *done*
 3. **Markdown provider + structural editing** — 2nd provider; promote/demote, move
    subtrees, priorities, tags — *done*
-4. **Rich content** — tables, lists/checkboxes, links, timestamps, markup, drawers
+4. **Rich content** — timestamps *(done)*; tables, lists/checkboxes, links, markup, drawers
 5. **Agenda** — multi-file views, sparse trees, custom keywords, dependencies
 6. **Organize** — capture, refile, archive
 7. **Time** — clocking, clock tables, repeaters, effort estimates

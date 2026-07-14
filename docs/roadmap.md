@@ -36,7 +36,7 @@ manual's core chapters, and the milestone that owns it. ✅ = shipped.
 | Plain lists: bullets, checkboxes, `[1/3]` statistics cookies | M4 |
 | Tables: editor with alignment + spreadsheet formulas | M4 |
 | Hyperlinks: `[[link][desc]]`, internal + external, follow | M4 |
-| Timestamps: active/inactive, `SCHEDULED`/`DEADLINE` | M4 |
+| Timestamps: active/inactive, `SCHEDULED`/`DEADLINE`, ranges + repeaters (parsed) | M4 ✅ |
 | Inline markup: emphasis, verbatim, sub/superscript | M4 |
 | Drawers and `PROPERTIES` | M4 |
 | Agenda views: day/week, multi-file collection | M5 |
@@ -63,7 +63,7 @@ flowchart TD
     M1["M1 · Core document model ✅"]
     M1 --> M2["M2 · Runnable TUI + Org outline core ✅<br/>fold · nav · TODO cycle · multi-buffer"]
     M2 --> M3["M3 · Markdown provider + structural editing ✅<br/>promote/demote · move subtree · insert · priorities · tags"]
-    M3 --> M4["M4 · Rich content<br/>tables · lists/checkboxes · links · timestamps · markup · drawers"]
+    M3 --> M4["M4 · Rich content (current)<br/>timestamps ✅ · tables · lists/checkboxes · links · markup · drawers"]
     M4 --> M5["M5 · Agenda<br/>multi-file views · sparse trees · custom keywords · dependencies"]
     M5 --> M6["M6 · Organize<br/>capture · refile · archive"]
     M6 --> M7["M7 · Time<br/>clocking · clock tables · repeaters · effort"]
@@ -97,12 +97,18 @@ operations landed as `StructureProvider` default methods over two per-format pri
 (marker byte, max level) — written once, working identically in Org and Markdown, which is
 the "second provider validates the trait" bet fully cashed in.*
 
-### M4 — Rich content
+### M4 — Rich content *(in progress)*
 Everything inside an entry parsed as data rather than plain text: tables (editor with column
 alignment, then spreadsheet formulas and recalculation), plain lists with checkboxes and
 `[1/3]`/`[50%]` statistics cookies, hyperlinks (`[[target][description]]`, internal and
 external, follow-link), active/inactive timestamps with `SCHEDULED`/`DEADLINE`, inline markup
 (emphasis, verbatim, sub/superscript), and drawers including `PROPERTIES`.
+
+*Status: **timestamps shipped** — the full grammar (active/inactive, time, time/date ranges,
+`+`/`++`/`.+` repeaters and `-`/`--` warnings) parses into a `Timestamp` model, planning lines
+(`SCHEDULED:`/`DEADLINE:`) attach to headings, and the TUI sets them, inserts timestamps, and
+shifts the field under the cursor (`Shift+↑/↓`, overloaded with priority the way Org does).
+Tables, lists, links, markup, and drawers remain.*
 
 ### M5 — Agenda
 The date model meets the multi-file machinery: timestamped and TODO items across files

@@ -12,7 +12,7 @@
 use std::path::Path;
 
 use crate::document::Document;
-use crate::timestamp::{field_at, find_timestamps, parse_timestamp, shift_field, Timestamp};
+use crate::timestamp::{field_at, find_timestamps, parse_timestamp, shift_field, Field, Timestamp};
 
 /// A TODO workflow keyword on a heading. M2 ships the two canonical states; custom keyword
 /// sets, priorities, and tags come later.
@@ -399,7 +399,9 @@ pub fn shift_timestamp(
         .into_iter()
         .find(|&(s, e)| col >= s && col < e)?;
     let tsraw = &text[start..end];
-    let field = field_at(tsraw, col - start)?;
+    // Inside a timestamp but not on a specific field (a bracket or a space) → shift the day,
+    // rather than surprising the user by falling through to priority cycling.
+    let field = field_at(tsraw, col - start).unwrap_or(Field::Day);
     // A range's second stamp: shift it instead when the cursor is past the `--`.
     let (ts, _) = parse_timestamp(tsraw)?;
     let sep = tsraw.find("--");
@@ -1228,6 +1230,15 @@ mod tests {
     fn shift_off_a_timestamp_returns_none() {
         assert!(shifted("no stamp here", 3, true).is_none());
         assert!(shifted("x <2024-01-15 Mon>", 0, true).is_none()); // before the stamp
+    }
+
+    #[test]
+    fn shift_inside_a_stamp_but_off_a_field_defaults_to_the_day() {
+        // Col 11 is the space between the day and the weekday — still inside the stamp.
+        assert_eq!(
+            shifted("<2024-01-15 Mon>", 11, true).as_deref(),
+            Some("<2024-01-16 Tue>")
+        );
     }
 
     // ---- set_planning -----------------------------------------------------------

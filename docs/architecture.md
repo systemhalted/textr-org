@@ -46,6 +46,7 @@ place, so a future GUI reuses the state and render logic without inheriting the 
         │ crates/core  (headless — no terminal, no ratatui)        │
         │  document::Document (rope I/O)   view::View (cursor+edit) │
         │  structure::{Outline, Heading, TodoState}                │
+        │  timestamp::{Timestamp, Stamp, …}  (Org date grammar)    │
         │  StructureProvider ──impl── OrgProvider · MarkdownProvider │
         │                     (Format + detect_format pick one)     │
         └─────────────────────────────────────────────────────────┘
@@ -94,14 +95,18 @@ later — is written once and works for every format.
 pub struct Outline { pub headings: Vec<Heading> }
 
 pub struct Heading {
-    pub level: usize,            // 1-based: Org "* "=1, "** "=2  (Markdown "# "=1 in M3)
+    pub level: usize,            // 1-based: Org "* "=1, "** "=2  (Markdown "# "=1)
     pub line: usize,             // line index the heading sits on
-    pub title: String,           // heading text, keyword + markers stripped
+    pub title: String,           // heading text, keyword/priority/markers/tags stripped
     pub todo: Option<TodoState>, // parsed leading TODO keyword, if any
+    pub priority: Option<char>,  // [#A]..[#C]
+    pub tags: Vec<String>,       // trailing :tag: run
+    pub scheduled: Option<Timestamp>, // planning line below the heading (Org only)
+    pub deadline: Option<Timestamp>,
     pub last_line: usize,        // last line of this heading's subtree → fold range line+1..=last_line
 }
 
-pub enum TodoState { Todo, Done } // custom keyword sets, priorities, tags → M3
+pub enum TodoState { Todo, Done } // custom keyword sets → M5
 
 pub trait StructureProvider {
     fn parse(&self, doc: &Document) -> Outline;
@@ -110,9 +115,14 @@ pub trait StructureProvider {
     fn max_level(&self) -> Option<usize>;  // None / Some(6)
     // …the structural-edit operations be DEFAULT METHODS, written once for every format:
     // promote/demote_heading, promote/demote_subtree, move_subtree_up/down,
-    // insert_sibling, cycle_priority, set_tags — all returning an EditOutcome
+    // insert_sibling, cycle_priority, set_tags, set_planning — all returning an EditOutcome
     // (Changed { cursor_line } | NoOp(reason)).
 }
+
+// The date layer (M4) lives in a sibling module and is format-agnostic. Timestamps are
+// parsed as data; `shift_timestamp` rewrites the field under the cursor; planning
+// (SCHEDULED:/DEADLINE:) is Org-only.
+pub fn shift_timestamp(doc: &mut Document, line: usize, col: usize, up: bool) -> Option<EditOutcome>;
 
 pub struct OrgProvider;      // recognizes ^(\*+) +(?:(TODO|DONE) +)?(rest)$
 pub struct MarkdownProvider; // recognizes ^(#{1,6}) +(?:(TODO|DONE) +)?(rest)$, skipping

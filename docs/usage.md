@@ -45,6 +45,9 @@ torg notes.org ideas.org  # several files — the first is shown, Alt+N reaches 
 | `Alt+T` (or `Alt+Shift+Enter`*) | Insert a `TODO` sibling heading. |
 | `Shift+↑` / `Shift+↓` | Raise / lower the heading's priority: none ↔ `[#C]` ↔ `[#B]` ↔ `[#A]`. |
 | `Ctrl+G` | Edit the heading's tags (space-separated in the prompt; empty removes them). |
+| `Alt+S` / `Alt+D` | Set the heading's `SCHEDULED` / `DEADLINE` date (Org buffers only). |
+| `Alt+.` / `Alt+i` | Insert an active `<…>` / inactive `[…]` timestamp at the cursor. |
+| `Shift+↑` / `Shift+↓` | On a timestamp, shift the field under the cursor; elsewhere, change priority. |
 | `Ctrl+S` | Save (opens the *Save As* prompt for an untitled buffer). |
 | `Ctrl+O` | Open a file (or switch to it, if it is already open). |
 | `Alt+N` / `Alt+P` | Switch to the next / previous buffer (wraps around). |
@@ -91,6 +94,33 @@ subtree).
 - **Tags** — `Ctrl+G` prompts for space-separated tags and writes them at the end of the
   headline as `:work:urgent:`. Tags may use letters, digits, and `_ @ # %`; an empty prompt
   removes the run. Tags and priorities are parsed as data — the agenda (M5) will use them.
+
+## Dates and scheduling
+
+torg understands Org timestamps as data. A timestamp is a date in `<…>` (active — the kind
+that would show up in an agenda) or `[…]` (inactive) brackets, optionally with a time, a time
+range, a second date for a `--` range, and repeater/warning cookies:
+
+```
+<2024-01-15 Mon>            <2024-01-15 Mon 09:30>       <2024-01-15 Mon 09:30-11:00>
+[2024-01-15 Mon]            <2024-01-15>--<2024-01-18>    <2024-01-15 Mon +1w -2d>
+```
+
+The weekday is optional when you type one — torg fills in (and keeps) the correct day.
+
+- **Schedule / deadline** — `Alt+S` and `Alt+D` prompt for a date and write it on an indented
+  planning line directly below the heading (`  SCHEDULED: <…>` / `  DEADLINE: <…>`; both can
+  share the line). Submitting an empty prompt removes that entry. These are Org-only.
+- **Insert a timestamp** — `Alt+.` (active) / `Alt+i` (inactive) prompt for a date and drop
+  the timestamp in at the cursor, in any buffer.
+- **Type the date** as `2024-01-15`, `2024-01-15 09:30`, a range, or with cookies — the same
+  grammar shown above, brackets optional in the prompt.
+- **Shift a field** — put the cursor on any part of a timestamp and press `Shift+↑` / `Shift+↓`
+  to bump the field under it (year, month, day, hour, minute, or a cookie's count). Days, hours,
+  and minutes carry; changing the month or year clamps the day to the month's length
+  (Jan 31 → Feb 29 in a leap year). Off a timestamp, `Shift+↑`/`↓` still cycles the priority.
+
+Timestamps and the `SCHEDULED:`/`DEADLINE:` keywords are highlighted in the buffer.
 
 ## File formats
 
@@ -158,5 +188,6 @@ This is the first runnable milestone; several things are deliberately out of sco
 - **No line wrapping** — long lines are clipped at the right edge (no horizontal scroll).
 - **Cursor drift on wide/combining characters** — the cursor is placed by character count, so
   full-width CJK or grapheme clusters can misalign visually.
-- **No tables, timestamps, agenda, source-block execution, or export yet** — see
-  [`roadmap.md`](roadmap.md) for where these land (M4–M10).
+- **No tables, lists, links, agenda, source-block execution, or export yet** — see
+  [`roadmap.md`](roadmap.md) for where these land (M4–M10). Timestamps parse as data and can
+  be edited, but there is no agenda that collects them yet (M5).

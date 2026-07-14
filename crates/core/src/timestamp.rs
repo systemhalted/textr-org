@@ -300,10 +300,8 @@ fn parse_repeater(s: &str) -> Option<Repeater> {
         (RepeatKind::PlusPlus, r)
     } else if let Some(r) = s.strip_prefix(".+") {
         (RepeatKind::DotPlus, r)
-    } else if let Some(r) = s.strip_prefix('+') {
-        (RepeatKind::Plus, r)
     } else {
-        return None;
+        (RepeatKind::Plus, s.strip_prefix('+')?)
     };
     let (n, unit) = parse_count_unit(rest)?;
     Some(Repeater { kind, n, unit })
@@ -312,10 +310,8 @@ fn parse_repeater(s: &str) -> Option<Repeater> {
 fn parse_warning(s: &str) -> Option<Warning> {
     let (double, rest) = if let Some(r) = s.strip_prefix("--") {
         (true, r)
-    } else if let Some(r) = s.strip_prefix('-') {
-        (false, r)
     } else {
-        return None;
+        (false, s.strip_prefix('-')?)
     };
     let (n, unit) = parse_count_unit(rest)?;
     Some(Warning { double, n, unit })

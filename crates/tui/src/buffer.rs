@@ -28,6 +28,9 @@ pub struct Buffer {
     /// The document format (chosen by file extension), deciding which structure provider
     /// parses this buffer. Re-detected when *Save As* gives the buffer a new path.
     pub(crate) format: Format,
+    /// A fixed display name for a path-less scratch buffer (e.g. `*Quick reference*`). `None`
+    /// for ordinary file buffers, which name themselves from their path.
+    pub(crate) name: Option<String>,
 }
 
 impl Buffer {
@@ -44,6 +47,7 @@ impl Buffer {
             scroll_top: 0,
             stash_path,
             format,
+            name: None,
         }
     }
 
@@ -52,9 +56,31 @@ impl Buffer {
         Self::new(Document::new(), None)
     }
 
-    /// The name shown in the status line and buffer list: the file name of the document's
-    /// path, else of the stashed first-save path, else `[No Name]`.
+    /// A named, path-less buffer holding `text` — used for in-editor documentation. Parsed as
+    /// Markdown so the docs' `#`/`##` headings fold and navigate.
+    pub fn scratch(name: String, text: &str) -> Self {
+        let doc = Document::from_text(text);
+        let format = Format::Markdown;
+        let outline = format.parse(&doc);
+        Self {
+            doc,
+            view: View::new(),
+            folded: HashSet::new(),
+            outline,
+            scroll_top: 0,
+            stash_path: None,
+            format,
+            name: Some(name),
+        }
+    }
+
+    /// The name shown in the status line and buffer list: a scratch buffer's fixed name, else
+    /// the file name of the document's path, else of the stashed first-save path, else
+    /// `[No Name]`.
     pub fn display_name(&self) -> String {
+        if let Some(name) = &self.name {
+            return name.clone();
+        }
         self.doc
             .path()
             .or(self.stash_path.as_deref())

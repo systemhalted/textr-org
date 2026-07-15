@@ -54,6 +54,9 @@ pub enum Action {
     SetDeadline,
     InsertActiveTs,
     InsertInactiveTs,
+    // documentation
+    Help,
+    Guide,
 }
 
 /// Map a key press to an [`Action`], or `None` if the key is unbound.
@@ -103,6 +106,8 @@ pub fn key_to_action(key: KeyEvent) -> Option<Action> {
             'b' => Some(Action::ListBuffers),
             'w' => Some(Action::CloseBuffer),
             'g' => Some(Action::EditTags),
+            'k' => Some(Action::Help),
+            'u' => Some(Action::Guide),
             _ => None,
         },
         // Alt chords: buffer commands (echoing Ctrl+N/P's heading navigation), plus the
@@ -222,6 +227,12 @@ mod tests {
     #[test]
     fn ctrl_b_lists_buffers() {
         assert_eq!(key_to_action(ctrl('b')), Some(Action::ListBuffers));
+    }
+
+    #[test]
+    fn ctrl_k_and_ctrl_u_open_the_docs() {
+        assert_eq!(key_to_action(ctrl('k')), Some(Action::Help));
+        assert_eq!(key_to_action(ctrl('u')), Some(Action::Guide));
     }
 
     #[test]

@@ -72,11 +72,23 @@ cd torg
 cargo install --path crates/tui   # installs `torg` into ~/.cargo/bin
 ```
 
+## Man page
+
+The Homebrew and `.deb` installs include a man page, so `man torg` works right away. The
+release tarballs also carry `torg.1` next to the binary. Installing **from source** with
+`cargo` doesn't place a man page, but you can do it by hand:
+
+```sh
+sudo install -Dm644 man/torg.1 /usr/local/share/man/man1/torg.1
+```
+
+Either way, inside the editor `Ctrl+K` shows the key reference and `Ctrl+U` the full guide.
+
 ## Verify it works
 
 ```sh
-torg notes.org
+torg --version        # print the version
+torg notes.org        # open the editor on notes.org (created on first save)
 ```
 
-opens the editor on `notes.org` (creating it on first save). See [`usage.md`](usage.md) for the
-key bindings.
+See [`usage.md`](usage.md) for the key bindings and [`guide.md`](guide.md) for a full tour.

@@ -1,0 +1,146 @@
+.TH TORG 1 "2026" "torg" "User Commands"
+.SH NAME
+torg \- an Org-mode\(hyflavored terminal text editor
+.SH SYNOPSIS
+.B torg
+.RI [ OPTIONS ]
+.RI [ FILE ...]
+.SH DESCRIPTION
+.B torg
+is a terminal text editor whose editing model is structure\(hyfirst, in the spirit of
+Emacs Org mode: a document is a tree of headings you fold, navigate, restructure, and
+annotate.
+It edits two formats with the same commands \(em
+.B Org
+(headings marked with
+.BR * )
+and
+.B Markdown
+(headings marked with
+.BR # ).
+.PP
+Each named file opens in its own buffer. A file that exists is loaded; a path that does not
+exist yet is created on first save; with no file,
+.B torg
+starts with an empty, untitled buffer.
+Files ending in
+.B .md
+or
+.B .markdown
+are treated as Markdown; everything else (including
+.BR .org )
+as Org.
+.SH OPTIONS
+.TP
+.BR \-h ", " \-\-help
+Print a short help message and exit.
+.TP
+.BR \-V ", " \-\-version
+Print the version and exit.
+.TP
+.B \-\-
+Stop option parsing; every following argument is treated as a file name, even one that
+begins with
+.BR - .
+.SH KEY BINDINGS
+Keys are grouped by what they do. Full detail is in the guide (see
+.BR "SEE ALSO" ).
+.SS Movement and editing
+.TP
+.BR Left ", " Right ", " Up ", " Down
+Move the cursor (Up/Down keep a goal column).
+.TP
+.BR Home ", " End ", " PageUp ", " PageDown
+Line ends and screenful paging.
+.TP
+.B Enter
+Split the line;
+.BR Backspace / Delete
+delete and join at the edges.
+.TP
+.B Tab
+Fold a heading's subtree, or insert a tab elsewhere.
+.SS Outline and TODO
+.TP
+.BR Ctrl+N ", " Ctrl+P
+Jump to the next / previous heading.
+.TP
+.B Ctrl+T
+Cycle a heading's keyword: none \(-> TODO \(-> DONE \(-> none.
+.SS Restructuring
+.TP
+.BR Alt+Left ", " Alt+Right
+Promote / demote the heading (add
+.B Shift
+for the whole subtree).
+.TP
+.BR Alt+Up ", " Alt+Down
+Move the subtree up / down among its siblings.
+.TP
+.BR Alt+Enter ", " Alt+T
+Insert a sibling heading, or a
+.B TODO
+sibling.
+.SS Priorities, tags, dates
+.TP
+.BR Shift+Up ", " Shift+Down
+On a timestamp, shift the field under the cursor; otherwise raise / lower the priority
+.RB ( [#A] / [#B] / [#C] ).
+.TP
+.B Ctrl+G
+Edit the heading's tags.
+.TP
+.BR Alt+S ", " Alt+D
+Set the heading's SCHEDULED / DEADLINE date (Org only).
+.TP
+.BR Alt+. ", " Alt+i
+Insert an active
+.RB < ... >
+or inactive
+.RB [ ... ]
+timestamp.
+.SS Files, buffers, and help
+.TP
+.B Ctrl+S
+Save (Save As for an untitled buffer).
+.TP
+.B Ctrl+O
+Open a file
+.RB ( ~ / $VAR
+expansion and
+.B Tab
+completion).
+.TP
+.BR Alt+N ", " Alt+P
+Switch to the next / previous buffer.
+.TP
+.BR Ctrl+B ", " Ctrl+W
+Buffer list; close the current buffer.
+.TP
+.BR Ctrl+K ", " Ctrl+U
+Open the quick key reference / the full guide in the editor.
+.TP
+.B Ctrl+Q
+Quit (asks before discarding unsaved changes).
+.TP
+.B Esc
+Cancel a prompt, picker, or confirmation.
+.SH EXIT STATUS
+.TP
+.B 0
+Success (including
+.B \-\-help
+and
+.BR \-\-version ).
+.TP
+.B 1
+A file could not be opened, or the terminal could not be set up.
+.TP
+.B 2
+An unknown command\(hyline option was given.
+.SH SEE ALSO
+The full feature guide and key reference:
+.UR https://github.com/systemhalted/torg
+.UE .
+.SH AUTHOR
+torg is free software under the GPL\(hy2.0\(hyor\(hylater license.

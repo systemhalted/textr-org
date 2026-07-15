@@ -31,6 +31,7 @@ heading navigation, TODO cycling, promote/demote and subtree moves, priorities, 
 Org timestamps with SCHEDULED/DEADLINE. It also reads Markdown (# ATX) headings."""
 assets = [
     ["target/release/torg", "usr/bin/", "755"],
+    ["../../man/torg.1", "usr/share/man/man1/torg.1", "644"],
     ["../../README.md", "usr/share/doc/torg/README.md", "644"],
     ["../../docs/usage.md", "usr/share/doc/torg/usage.md", "644"],
 ]

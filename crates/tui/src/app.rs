@@ -475,7 +475,24 @@ impl App {
             Action::SetDeadline => self.open_date_prompt(DatePurpose::Deadline),
             Action::InsertActiveTs => self.open_date_prompt(DatePurpose::InsertActive),
             Action::InsertInactiveTs => self.open_date_prompt(DatePurpose::InsertInactive),
+            Action::Help => self.open_doc("*Quick reference*", include_str!("../../../docs/usage.md")),
+            Action::Guide => self.open_doc("*torg guide*", include_str!("../../../docs/guide.md")),
         }
+    }
+
+    /// Open a read-through documentation buffer named `name` holding `text` (switching to it if
+    /// it's already open). Used for the in-editor quick reference and guide.
+    fn open_doc(&mut self, name: &str, text: &str) {
+        if let Some(i) = self
+            .buffers
+            .iter()
+            .position(|b| b.name.as_deref() == Some(name))
+        {
+            self.switch_to(i);
+            return;
+        }
+        self.buffers.push(Buffer::scratch(name.to_string(), text));
+        self.switch_to(self.buffers.len() - 1);
     }
 
     /// `Shift+↑/↓`: shift the timestamp field under the cursor if there is one, else cycle the
@@ -1453,6 +1470,24 @@ mod tests {
         let mut app = single(Document::from_text("* TODO task\n"), None);
         shift_key(&mut app, KeyCode::Up);
         assert_eq!(app.document().text(), "* TODO [#C] task\n");
+    }
+
+    #[test]
+    fn ctrl_k_and_ctrl_u_open_named_doc_buffers_without_duplicating() {
+        let mut app = single(Document::from_text("* work\n"), None);
+        ctrl(&mut app, 'k'); // quick reference
+        assert_eq!(app.buffer_count(), 2);
+        assert_eq!(app.buffer_labels()[app.active_index()].0, "*Quick reference*");
+        assert!(app.document().text().contains("torg")); // embedded doc content
+
+        ctrl(&mut app, 'u'); // full guide
+        assert_eq!(app.buffer_count(), 3);
+        assert_eq!(app.buffer_labels()[app.active_index()].0, "*torg guide*");
+
+        // Opening the quick reference again switches to the existing buffer, no duplicate.
+        ctrl(&mut app, 'k');
+        assert_eq!(app.buffer_count(), 3);
+        assert_eq!(app.buffer_labels()[app.active_index()].0, "*Quick reference*");
     }
 
     #[test]
